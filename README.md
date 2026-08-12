@@ -5,7 +5,7 @@ Verbindet sich mit demselben WebSocket, den `drcv.de/herbern#/livetiming` benutz
 SQLite auf und stellt die Daten danach über eine kleine Weboberfläche bereit -
 auch nachdem die Live-Ansicht auf drcv.de nach dem Rennen wieder leer ist.
 
-## Starten (Docker)
+## Starten (Docker, lokal gebaut)
 
 ```bash
 docker compose up -d --build
@@ -14,6 +14,37 @@ docker compose up -d --build
 Web-UI danach unter `http://<server>:8080`.
 
 Die SQLite-Datei liegt in `./data/livetiming.db` (Volume-Mount, übersteht Neustarts/Updates).
+
+## Starten (Portainer / fertiges Image)
+
+Bei jedem Push nach `main` baut [.github/workflows/docker-build.yml](.github/workflows/docker-build.yml)
+automatisch ein Image und pusht es nach `ghcr.io/c4sti3l/drcv-scraper:latest`. Für Portainer
+(Stacks → Add Stack → Web editor) reicht es, den Inhalt von
+[docker-compose.portainer.yml](docker-compose.portainer.yml) einzufügen:
+
+```yaml
+services:
+  drcv-livetiming:
+    image: ghcr.io/c4sti3l/drcv-scraper:latest
+    container_name: drcv-livetiming
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - drcv-data:/app/data
+
+volumes:
+  drcv-data:
+```
+
+**Wichtig:** Das GHCR-Package ist standardmäßig **privat**. Damit Portainer es ohne
+Zugangsdaten pullen kann, einmalig auf public stellen:
+GitHub → dein Profil → *Packages* → `drcv-scraper` → *Package settings* →
+*Change visibility* → *Public*. Alternativ in Portainer unter *Registries* einen
+GHCR-Zugang mit einem GitHub *Personal Access Token* (Scope `read:packages`) hinterlegen.
+
+Nach jedem neuen Build in GitHub Actions muss der Stack in Portainer mit
+*„Re-pull image and redeploy“* neu deployed werden, damit die neue Version gezogen wird.
 
 ## Ohne Docker
 
