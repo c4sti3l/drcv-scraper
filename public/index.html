@@ -4,8 +4,13 @@
 <meta charset="utf-8" />
 <title>DRCV Herbern — Live-Timing Archiv</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="color-scheme" content="dark" />
-<meta name="theme-color" content="#000000" />
+<meta name="theme-color" content="#000000" id="theme-color-meta" />
+<script>
+  // Runs before first paint so a saved "light" preference never flashes dark first.
+  if (localStorage.getItem("drcv-theme") === "light") {
+    document.documentElement.setAttribute("data-theme", "light");
+  }
+</script>
 <style>
   :root {
     color-scheme: dark;
@@ -43,6 +48,30 @@
     --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
     font-size: 16px;
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+
+    --bg: #f2f2f7;
+    --surface: #ffffff;
+    --surface-2: #e5e5ea;
+    --surface-press: #d1d1d6;
+    --hairline: rgba(0,0,0,0.08);
+    --hairline-strong: rgba(0,0,0,0.14);
+
+    --text: rgba(0,0,0,0.92);
+    --text-secondary: rgba(0,0,0,0.55);
+    --text-tertiary: rgba(0,0,0,0.38);
+
+    --accent: #ff9500;
+    --accent-text: #c2660d;
+    --success: #248a3d;
+    --live: #ff3b30;
+
+    --gold: #a66a00;
+    --silver: #6e6e73;
+    --bronze: #9a5626;
   }
 
   * { box-sizing: border-box; }
@@ -84,6 +113,7 @@
   .topbar.scrolled { border-bottom-color: var(--hairline); }
 
   .topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; min-height: 2rem; }
+  .topbar-actions { display: flex; align-items: center; gap: 0.2rem; }
 
   .back-btn {
     display: inline-flex; align-items: center; gap: 0.15rem;

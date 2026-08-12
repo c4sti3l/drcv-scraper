@@ -1,3 +1,4 @@
+const fs = require("fs");
 const db = require("./db");
 const { LiveTimingClient } = require("./wsClient");
 const { Ingest } = require("./ingest");
@@ -6,12 +7,18 @@ const { createServer } = require("./server");
 const DATA_DIR = process.env.DATA_DIR || "./data";
 const DB_PATH = process.env.DB_PATH || `${DATA_DIR}/livetiming.db`;
 const PORT = process.env.PORT || 8080;
+const SEED_DEMO_DATA = process.env.SEED_DEMO_DATA !== "false";
 
 function log(...args) {
   console.log(new Date().toISOString(), ...args);
 }
 
+const isFreshDb = !fs.existsSync(DB_PATH);
 db.init(DB_PATH);
+if (isFreshDb && SEED_DEMO_DATA) {
+  require("./seed").run();
+  log("Frisches Volume erkannt: Demo-Läufe eingespielt (SEED_DEMO_DATA=false zum Deaktivieren, per 'Bearbeiten' löschbar)");
+}
 const ingest = new Ingest();
 
 const client = new LiveTimingClient();

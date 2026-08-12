@@ -9,6 +9,38 @@ let editMode = false;
 const ICON_CHEVRON = `<svg class="chevron" viewBox="0 0 8 14" fill="none" aria-hidden="true"><path d="M1 1L7 7L1 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_BACK = `<svg viewBox="0 0 12 20" fill="none" width="1.05em" height="1.05em" aria-hidden="true"><path d="M10 1L2 10L10 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_TRASH = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M3.5 4l.6 9.5a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9L12.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_SUN = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3.2" stroke="currentColor" stroke-width="1.4"/><path d="M8 1v1.6M8 13.4V15M15 8h-1.6M2.6 8H1M12.7 3.3l-1.1 1.1M4.4 11.6l-1.1 1.1M12.7 12.7l-1.1-1.1M4.4 4.4L3.3 3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+const ICON_MOON = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.7A6 6 0 1 1 6.3 2.5a5 5 0 0 0 7.2 7.2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+
+// ---------- theme ----------
+
+function currentTheme() {
+  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
+
+function applyThemeColorMeta(theme) {
+  const meta = document.getElementById("theme-color-meta");
+  if (meta) meta.content = theme === "light" ? "#f2f2f7" : "#000000";
+}
+
+function toggleTheme() {
+  const next = currentTheme() === "light" ? "dark" : "light";
+  if (next === "light") document.documentElement.setAttribute("data-theme", "light");
+  else document.documentElement.removeAttribute("data-theme");
+  localStorage.setItem("drcv-theme", next);
+  applyThemeColorMeta(next);
+  document.querySelectorAll(".theme-btn").forEach((btn) => { btn.innerHTML = themeIcon(next); });
+}
+
+function themeIcon(theme) {
+  return theme === "light" ? ICON_MOON : ICON_SUN;
+}
+
+function themeToggleHtml() {
+  return `<button class="edit-btn theme-btn" onclick="toggleTheme()" aria-label="Zwischen Hell- und Dunkelmodus wechseln">${themeIcon(currentTheme())}</button>`;
+}
+
+applyThemeColorMeta(currentTheme());
 
 function esc(s) {
   return (s ?? "").toString().replace(/[&<>"']/g, (c) => ({
@@ -113,6 +145,7 @@ function renderListFromCache() {
   const editBtn = runs.length
     ? `<button class="edit-btn" onclick="toggleEditMode()">${editMode ? "Fertig" : "Bearbeiten"}</button>`
     : "";
+  const actions = `<div class="topbar-actions">${editBtn}${themeToggleHtml()}</div>`;
 
   const eventnames = [...new Set(runs.map((r) => r.eventname).filter(Boolean))];
   const subtitle = eventnames.length === 1
@@ -120,7 +153,7 @@ function renderListFromCache() {
     : `${runs.length} Läufe aufgezeichnet`;
 
   app.innerHTML = `
-    ${topbarHtml({ title: "Live-Timing", subtitleHtml: subtitle, actionHtml: editBtn })}
+    ${topbarHtml({ title: "Live-Timing", subtitleHtml: subtitle, actionHtml: actions })}
     <main>
       ${groups.length > 1 ? `<div class="filter-scroll"><div class="filter-row">${pills}</div></div>` : ""}
       ${!filtered.length ? emptyState("Noch keine Läufe aufgezeichnet.") : [
@@ -207,9 +240,10 @@ async function renderRun(id) {
   `;
 
   const deleteBtn = `<button class="edit-btn danger" onclick="deleteRun(${run.id}, true)" aria-label="Lauf löschen">${ICON_TRASH}</button>`;
+  const actions = `<div class="topbar-actions">${deleteBtn}${themeToggleHtml()}</div>`;
 
   app.innerHTML = `
-    ${topbarHtml({ backHash: "#/", title, subtitleHtml: subtitle, actionHtml: deleteBtn })}
+    ${topbarHtml({ backHash: "#/", title, subtitleHtml: subtitle, actionHtml: actions })}
     <main>
       ${!results.length ? emptyState("Noch keine Ergebnisse.") : `<div class="group">${results.map(driverRowHtml).join("")}</div>`}
       ${messages.length ? `<div class="section-header">Meldungen</div><div class="group">${messages.map(messageHtml).join("")}</div>` : ""}
