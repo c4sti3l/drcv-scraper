@@ -30,6 +30,8 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    environment:
+      - DELETE_PASSWORD=drcv26!
     volumes:
       - drcv-data:/app/data
 
@@ -45,6 +47,13 @@ GHCR-Zugang mit einem GitHub *Personal Access Token* (Scope `read:packages`) hin
 
 Nach jedem neuen Build in GitHub Actions muss der Stack in Portainer mit
 *„Re-pull image and redeploy“* neu deployed werden, damit die neue Version gezogen wird.
+
+## Konfiguration (Umgebungsvariablen)
+
+| Variable | Default | Bedeutung |
+| --- | --- | --- |
+| `DELETE_PASSWORD` | `drcv26!` | Wird beim Löschen eines Laufs abgefragt (nur ein einfacher Schutz gegen versehentliches Löschen durch Dritte, keine echte Zugriffskontrolle - der Wert liegt als Fallback im öffentlichen Quellcode). In der Compose-Datei überschreibbar. |
+| `SEED_DEMO_DATA` | `true` | Beim allerersten Start mit leerem Volume werden automatisch Demo-Läufe (echte Fahrer/Klassen von RG Ahlen, erfundene Zeiten) eingespielt, damit die Oberfläche nicht leer ist, solange kein echtes Rennen läuft. Auf `false` setzen, um das zu deaktivieren; die Demo-Läufe lassen sich jederzeit über „Bearbeiten“ in der Oberfläche wieder löschen. |
 
 ## Ohne Docker
 

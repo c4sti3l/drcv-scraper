@@ -205,8 +205,17 @@ function onRunRowClick(e, id) {
 }
 
 async function deleteRun(id, redirectAfter) {
-  if (!confirm("Diesen Lauf inklusive aller Rundenzeiten unwiderruflich löschen?")) return;
-  const res = await fetch(`/api/runs/${id}`, { method: "DELETE" });
+  const password = prompt("Passwort zum Löschen dieses Laufs:");
+  if (password === null) return;
+  const res = await fetch(`/api/runs/${id}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  if (res.status === 403) {
+    alert("Falsches Passwort.");
+    return;
+  }
   if (!res.ok) {
     alert("Löschen fehlgeschlagen.");
     return;

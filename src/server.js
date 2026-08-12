@@ -2,8 +2,13 @@ const path = require("path");
 const express = require("express");
 const db = require("./db");
 
+// Simple shared password so casual visitors can't delete runs by accident.
+// Not real access control - set via DELETE_PASSWORD in docker-compose.
+const DELETE_PASSWORD = process.env.DELETE_PASSWORD || "drcv26!";
+
 function createServer() {
   const app = express();
+  app.use(express.json());
 
   app.get("/api/runs", (req, res) => {
     res.json(db.listRuns());
@@ -24,6 +29,9 @@ function createServer() {
   });
 
   app.delete("/api/runs/:id", (req, res) => {
+    if (req.body?.password !== DELETE_PASSWORD) {
+      return res.status(403).json({ error: "falsches Passwort" });
+    }
     const run = db.getRun(req.params.id);
     if (!run) return res.status(404).json({ error: "not found" });
     db.deleteRun(req.params.id);

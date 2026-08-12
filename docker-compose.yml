@@ -5,5 +5,7 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    environment:
+      - DELETE_PASSWORD=drcv26!
     volumes:
       - ./data:/app/data
