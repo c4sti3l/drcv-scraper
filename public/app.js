@@ -204,15 +204,42 @@ function onRunRowClick(e, id) {
   location.hash = `#/run/${id}`;
 }
 
+const DELETE_AUTH_KEY = "drcv-delete-auth";
+const DELETE_AUTH_MS = 5 * 60 * 1000; // remember the password for a few minutes
+
+function getCachedDeletePassword() {
+  try {
+    const raw = localStorage.getItem(DELETE_AUTH_KEY);
+    if (!raw) return null;
+    const { password, expiresAt } = JSON.parse(raw);
+    if (!password || Date.now() > expiresAt) {
+      localStorage.removeItem(DELETE_AUTH_KEY);
+      return null;
+    }
+    return password;
+  } catch {
+    return null;
+  }
+}
+
+function cacheDeletePassword(password) {
+  localStorage.setItem(DELETE_AUTH_KEY, JSON.stringify({ password, expiresAt: Date.now() + DELETE_AUTH_MS }));
+}
+
 async function deleteRun(id, redirectAfter) {
-  const password = prompt("Passwort zum Löschen dieses Laufs:");
-  if (password === null) return;
+  const cached = getCachedDeletePassword();
+  let password = cached;
+  if (password == null) {
+    password = prompt("Passwort zum Löschen dieses Laufs:");
+    if (password === null) return;
+  }
   const res = await fetch(`/api/runs/${id}`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password }),
   });
   if (res.status === 403) {
+    if (cached != null) localStorage.removeItem(DELETE_AUTH_KEY);
     alert("Falsches Passwort.");
     return;
   }
@@ -220,6 +247,7 @@ async function deleteRun(id, redirectAfter) {
     alert("Löschen fehlgeschlagen.");
     return;
   }
+  cacheDeletePassword(password);
   runsCache = (runsCache || []).filter((r) => r.id !== id);
   if (redirectAfter) {
     location.hash = "#/";
@@ -270,6 +298,7 @@ function driverRowHtml(r) {
            data-run="${esc(r.run_id)}" data-nr="${esc(r.nr)}"
            onclick="toggleRow(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRow(this);}">
         <div class="pos-badge ${posClass}">${r.position ?? "–"}</div>
+        <div class="nr-chip">${esc(r.nr)}</div>
         <div class="row-main">
           <div class="driver-name">${esc(r.fullname)}</div>
           ${sub ? `<div class="driver-sub">${esc(sub)}</div>` : ""}
@@ -288,7 +317,6 @@ function driverRowHtml(r) {
 
 function statGridHtml(r) {
   const cells = [
-    ["Nr", r.nr],
     ["Runden", r.laps],
     ["Beste Zeit", r.besttime],
     ["Top km/h", r.bestspeed],
