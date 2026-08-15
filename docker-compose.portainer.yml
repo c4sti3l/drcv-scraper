@@ -1,0 +1,14 @@
+services:
+  drcv-livetiming:
+    image: ghcr.io/c4sti3l/drcv-scraper:latest
+    container_name: drcv-livetiming
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - DELETE_PASSWORD=drcv26!
+    volumes:
+      - drcv-data:/app/data
+
+volumes:
+  drcv-data:
