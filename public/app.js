@@ -1,17 +1,24 @@
 const app = document.getElementById("app");
 
 let runsCache = null;
+let racesCache = null;
 let resultsByRun = {};
 let scrollHandler = null;
 let activeFilter = "all";
+let raceDetailFilter = "all";
 let editMode = false;
+let selectedRunIds = new Set();
+let visibleRunIds = [];
+let currentListView = "list"; // "list" | "race" - which page edit-mode actions apply to
 let currentRunResults = [];
 let currentRunFastestSec = Infinity;
 let runSearchQuery = "";
+let currentRaceId = null;
 
 const ICON_CHEVRON = `<svg class="chevron" viewBox="0 0 8 14" fill="none" aria-hidden="true"><path d="M1 1L7 7L1 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_BACK = `<svg viewBox="0 0 12 20" fill="none" width="1.05em" height="1.05em" aria-hidden="true"><path d="M10 1L2 10L10 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_TRASH = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M3.5 4l.6 9.5a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9L12.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_CHECK = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_SAVE = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 const ICON_CLOSE = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 const ICON_SUN = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3.2" stroke="currentColor" stroke-width="1.4"/><path d="M8 1v1.6M8 13.4V15M15 8h-1.6M2.6 8H1M12.7 3.3l-1.1 1.1M4.4 11.6l-1.1 1.1M12.7 12.7l-1.1-1.1M4.4 4.4L3.3 3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
@@ -69,6 +76,16 @@ function parseTimeToSeconds(t) {
   return parts.length === 2 ? Number(parts[0]) * 60 + Number(parts[1]) : Number(t);
 }
 
+// A run without ended_at only counts as "live" while its start date is still
+// today - otherwise it's a stale run that never got closed properly (e.g.
+// after a restart) and belongs under "Beendet" instead of blinking forever.
+function isLiveRun(r) {
+  if (r.ended_at || !r.started_at) return false;
+  const d = new Date(r.started_at);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
 // ---------- navigation / view transitions ----------
 
 async function withTransition(update) {
@@ -85,6 +102,10 @@ async function render() {
   await withTransition(async () => {
     if (hash.startsWith("run/")) {
       await renderRun(hash.slice(4));
+    } else if (hash === "races") {
+      await renderRaces();
+    } else if (hash.startsWith("race/")) {
+      await renderRaceRuns(hash.slice(5));
     } else {
       await renderList();
     }
@@ -103,12 +124,12 @@ function attachScrollListener() {
 
 // ---------- shared markup ----------
 
-function topbarHtml({ backHash, title, subtitleHtml, actionHtml }) {
+function topbarHtml({ backHash, backLabel, title, subtitleHtml, actionHtml }) {
   return `
     <header class="topbar">
       ${backHash || actionHtml ? `
         <div class="topbar-row">
-          ${backHash ? `<a class="back-btn" href="${backHash}">${ICON_BACK}<span>Läufe</span></a>` : "<span></span>"}
+          ${backHash ? `<a class="back-btn" href="${backHash}">${ICON_BACK}<span>${esc(backLabel || "Läufe")}</span></a>` : "<span></span>"}
           ${actionHtml || ""}
         </div>` : ""}
       <h1 class="title">${esc(title)}</h1>
@@ -130,38 +151,67 @@ async function renderList() {
   if (!runsCache) {
     app.innerHTML = topbarHtml({ title: "Live-Timing" }) + `<main>${skeletonGroup(4)}</main>`;
   }
-  const runs = await fetch("/api/runs").then((r) => r.json());
+  await reloadListData(false);
+}
+
+async function reloadListData(animate) {
+  const [runs, races] = await Promise.all([
+    fetch("/api/runs").then((r) => r.json()),
+    fetch("/api/races").then((r) => r.json()),
+  ]);
   runsCache = runs;
-  renderListFromCache();
+  racesCache = races;
+  const update = () => renderListFromCache();
+  if (animate === false) {
+    update();
+  } else if (document.startViewTransition) {
+    await document.startViewTransition(update).finished.catch(() => {});
+  } else {
+    update();
+  }
 }
 
 function renderListFromCache() {
-  const runs = runsCache || [];
+  currentListView = "list";
+  const allRuns = runsCache || [];
+  const races = racesCache || [];
+
+  // Only runs nobody has sorted into a race yet show up here - as soon as a
+  // run is assigned it moves to that race's page under "Vergangene Rennen".
+  const runs = allRuns.filter((r) => r.race_id == null);
+
   const groups = [...new Set(runs.map((r) => r.groupname).filter(Boolean))];
   if (activeFilter !== "all" && !groups.includes(activeFilter)) activeFilter = "all";
   const filtered = activeFilter === "all" ? runs : runs.filter((r) => r.groupname === activeFilter);
-  const live = filtered.filter((r) => !r.ended_at);
-  const done = filtered.filter((r) => r.ended_at);
+  visibleRunIds = filtered.map((r) => r.id);
+
+  const live = filtered.filter(isLiveRun);
+  const done = filtered.filter((r) => !isLiveRun(r));
 
   const pills = ["all", ...groups]
     .map((g) => `<button class="filter-pill ${activeFilter === g ? "active" : ""}" onclick="setFilter('${esc(g)}')">${g === "all" ? "Alle" : esc(g)}</button>`)
     .join("");
 
-  const editBtn = runs.length
-    ? `<button class="edit-btn" onclick="toggleEditMode()">${editMode ? "Fertig" : "Bearbeiten"}</button>`
+  const pastRacesBtn = races.length
+    ? `<button class="edit-btn" onclick="location.hash='#/races'">Vergangene Rennen</button>`
     : "";
-  const actions = `<div class="topbar-actions">${editBtn}${themeToggleHtml()}</div>`;
+  const editBtn = `<button class="edit-btn" onclick="toggleEditMode()">${editMode ? "Fertig" : "Bearbeiten"}</button>`;
+  const actions = `<div class="topbar-actions">${pastRacesBtn}${editBtn}${themeToggleHtml()}</div>`;
 
   const eventnames = [...new Set(runs.map((r) => r.eventname).filter(Boolean))];
-  const subtitle = eventnames.length === 1
-    ? `${esc(eventnames[0])} &middot; ${runs.length} Läufe aufgezeichnet`
-    : `${runs.length} Läufe aufgezeichnet`;
+  const countLabel = races.length ? `${runs.length} Läufe ohne Rennen` : `${runs.length} Läufe aufgezeichnet`;
+  const subtitle = eventnames.length === 1 ? `${esc(eventnames[0])} &middot; ${countLabel}` : countLabel;
+
+  const emptyText = allRuns.length && !runs.length
+    ? "Alle Läufe sind bereits einem Rennen zugeordnet."
+    : "Noch keine Läufe aufgezeichnet.";
 
   app.innerHTML = `
     ${topbarHtml({ title: "Live-Timing", subtitleHtml: subtitle, actionHtml: actions })}
     <main>
+      ${editMode ? selectionToolsHtml(visibleRunIds, races, null, false) : ""}
       ${groups.length > 1 ? `<div class="filter-scroll"><div class="filter-row">${pills}</div></div>` : ""}
-      ${!filtered.length ? emptyState("Noch keine Läufe aufgezeichnet.") : [
+      ${!filtered.length ? emptyState(emptyText) : [
         live.length ? sectionHtml("Live", live, true) : "",
         done.length ? sectionHtml("Beendet", done, false) : "",
       ].join("")}
@@ -175,9 +225,249 @@ function setFilter(g) {
   else update();
 }
 
-function toggleEditMode() {
+function currentViewRender() {
+  if (currentListView === "race") renderRaceRunsFromCache();
+  else renderListFromCache();
+}
+
+async function toggleEditMode() {
+  if (!editMode) {
+    const ok = await ensureAuth();
+    if (!ok) return;
+  } else {
+    selectedRunIds.clear();
+  }
   editMode = !editMode;
-  const update = () => renderListFromCache();
+  const update = currentViewRender;
+  if (document.startViewTransition) document.startViewTransition(update);
+  else update();
+}
+
+// ---------- races ----------
+
+// excludeRaceId hides that race from the assign targets (no point offering
+// to "move" a run into the race it's already in); showUnassign adds a
+// "Kein Rennen" action for fixing a run sorted into the wrong race.
+function selectionToolsHtml(ids, races, excludeRaceId, showUnassign) {
+  const n = selectedRunIds.size;
+  const allSelected = ids.length > 0 && ids.every((id) => selectedRunIds.has(id));
+  const selectionBar = ids.length ? `
+    <div class="selection-bar">
+      <button class="text-btn" onclick="toggleSelectAll()">${allSelected ? "Keine auswählen" : "Alle auswählen"}</button>
+      <span class="selection-count">${n ? `${n} ausgewählt` : ""}</span>
+      <div class="selection-actions">
+        ${showUnassign ? `<button class="text-btn" ${n ? "" : "disabled"} onclick="assignSelectedToRace(null)">Kein Rennen</button>` : ""}
+        <button class="text-btn danger" ${n ? "" : "disabled"} onclick="deleteSelectedRuns()">Löschen</button>
+      </div>
+    </div>` : "";
+  const raceRows = races.filter((r) => r.id !== excludeRaceId).map((r) => `
+    <div class="row race-row">
+      <div class="row-main">
+        <div class="row-title">${esc(r.name)}</div>
+        <div class="row-meta">${r.run_count} ${r.run_count === 1 ? "Lauf" : "Läufe"}</div>
+      </div>
+      <button class="assign-btn" ${n ? "" : "disabled"} onclick="assignSelectedToRace(${r.id})">Zuordnen</button>
+    </div>`).join("");
+  return `
+    ${selectionBar}
+    <div class="section-header edit-races-header">Rennen</div>
+    <div class="group race-manager-group">
+      ${raceRows}
+      <div class="row race-row" tabindex="0" role="button" onclick="createRacePrompt()" onkeydown="if(event.key==='Enter')createRacePrompt()">
+        <div class="row-main"><div class="row-title new-race-title">+ Neues Rennen${n ? " & zuordnen" : ""}</div></div>
+      </div>
+    </div>`;
+}
+
+function toggleRunSelection(id) {
+  if (selectedRunIds.has(id)) selectedRunIds.delete(id);
+  else selectedRunIds.add(id);
+  currentViewRender();
+}
+
+function toggleSelectAll() {
+  const allSelected = visibleRunIds.length > 0 && visibleRunIds.every((id) => selectedRunIds.has(id));
+  if (allSelected) visibleRunIds.forEach((id) => selectedRunIds.delete(id));
+  else visibleRunIds.forEach((id) => selectedRunIds.add(id));
+  currentViewRender();
+}
+
+function clearSelection() {
+  selectedRunIds.clear();
+  currentViewRender();
+}
+
+async function deleteSelectedRuns() {
+  const ids = [...selectedRunIds];
+  if (!ids.length) return;
+  if (!confirm(`${ids.length} ${ids.length === 1 ? "Lauf" : "Läufe"} wirklich löschen?`)) return;
+  const password = getCachedDeletePassword();
+  const results = await Promise.all(ids.map((id) =>
+    fetch(`/api/runs/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) })
+  ));
+  if (results.some((r) => r.status === 403)) alert("Falsches Passwort.");
+  selectedRunIds.clear();
+  await reloadCurrentView();
+}
+
+async function assignSelectedToRace(raceId) {
+  const ids = [...selectedRunIds];
+  if (!ids.length) return;
+  const password = getCachedDeletePassword();
+  const results = await Promise.all(ids.map((id) =>
+    fetch(`/api/runs/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password, race_id: raceId }),
+    })
+  ));
+  if (results.some((r) => r.status === 403)) alert("Falsches Passwort.");
+  selectedRunIds.clear();
+  await reloadCurrentView();
+}
+
+async function reloadCurrentView() {
+  const [runs, races] = await Promise.all([
+    fetch("/api/runs").then((r) => r.json()),
+    fetch("/api/races").then((r) => r.json()),
+  ]);
+  runsCache = runs;
+  racesCache = races;
+  currentViewRender();
+}
+
+async function createRacePrompt() {
+  const name = prompt("Name für das neue Rennen:");
+  if (name == null || !name.trim()) return;
+  const password = getCachedDeletePassword();
+  const res = await fetch("/api/races", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name.trim(), password }),
+  });
+  if (res.status === 403) { alert("Falsches Passwort."); return; }
+  if (!res.ok) { alert("Rennen konnte nicht erstellt werden."); return; }
+  const race = await res.json();
+  if (selectedRunIds.size) await assignSelectedToRace(race.id);
+  else await reloadCurrentView();
+}
+
+// ---------- password auth ----------
+
+async function verifyPassword(password) {
+  const res = await fetch("/api/verify-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  return res.ok;
+}
+
+async function ensureAuth() {
+  const cached = getCachedDeletePassword();
+  if (cached != null) {
+    if (await verifyPassword(cached)) return true;
+    localStorage.removeItem(DELETE_AUTH_KEY);
+  }
+  const password = prompt("Passwort:");
+  if (password === null) return false;
+  if (!(await verifyPassword(password))) {
+    alert("Falsches Passwort.");
+    return false;
+  }
+  cacheDeletePassword(password);
+  return true;
+}
+
+// ---------- Vergangene Rennen ----------
+
+async function renderRaces() {
+  editMode = false;
+  if (!racesCache) {
+    app.innerHTML = topbarHtml({ backHash: "#/", title: "Vergangene Rennen" }) + `<main>${skeletonGroup(3)}</main>`;
+  }
+  racesCache = await fetch("/api/races").then((r) => r.json());
+  renderRacesFromCache();
+}
+
+function renderRacesFromCache() {
+  const races = racesCache || [];
+  const actions = `<div class="topbar-actions">${themeToggleHtml()}</div>`;
+  app.innerHTML = `
+    ${topbarHtml({ backHash: "#/", title: "Vergangene Rennen", subtitleHtml: `${races.length} ${races.length === 1 ? "Rennen" : "Rennen"}`, actionHtml: actions })}
+    <main>
+      ${!races.length ? emptyState("Noch keine Läufe einem Rennen zugeordnet.") : `<div class="group">${races.map(raceRowHtml).join("")}</div>`}
+    </main>`;
+}
+
+function raceRowHtml(r) {
+  return `
+    <div class="row" tabindex="0" role="link" onclick="location.hash='#/race/${r.id}'" onkeydown="if(event.key==='Enter')location.hash='#/race/${r.id}'">
+      <div class="row-main">
+        <div class="row-title">${esc(r.name)}</div>
+        <div class="row-meta">${r.run_count} ${r.run_count === 1 ? "Lauf" : "Läufe"}</div>
+      </div>
+      <div class="row-trail">${ICON_CHEVRON}</div>
+    </div>`;
+}
+
+async function renderRaceRuns(id) {
+  editMode = false;
+  raceDetailFilter = "all";
+  currentRaceId = Number(id);
+  const [runs, races] = await Promise.all([
+    fetch("/api/runs").then((r) => r.json()),
+    fetch("/api/races").then((r) => r.json()),
+  ]);
+  runsCache = runs;
+  racesCache = races;
+  renderRaceRunsFromCache();
+}
+
+function renderRaceRunsFromCache() {
+  currentListView = "race";
+  const races = racesCache || [];
+  const race = races.find((r) => r.id === currentRaceId);
+  const allRuns = (runsCache || []).filter((r) => r.race_id === currentRaceId);
+
+  const groups = [...new Set(allRuns.map((r) => r.groupname).filter(Boolean))];
+  if (raceDetailFilter !== "all" && !groups.includes(raceDetailFilter)) raceDetailFilter = "all";
+  const runs = raceDetailFilter === "all" ? allRuns : allRuns.filter((r) => r.groupname === raceDetailFilter);
+  visibleRunIds = runs.map((r) => r.id);
+
+  const pills = ["all", ...groups]
+    .map((g) => `<button class="filter-pill ${raceDetailFilter === g ? "active" : ""}" onclick="setRaceDetailFilter('${esc(g)}')">${g === "all" ? "Alle" : esc(g)}</button>`)
+    .join("");
+
+  const live = runs.filter(isLiveRun);
+  const done = runs.filter((r) => !isLiveRun(r));
+
+  const editBtn = allRuns.length
+    ? `<button class="edit-btn" onclick="toggleEditMode()">${editMode ? "Fertig" : "Bearbeiten"}</button>`
+    : "";
+  const actions = `<div class="topbar-actions">${editBtn}${themeToggleHtml()}</div>`;
+
+  app.innerHTML = `
+    ${topbarHtml({
+      backHash: "#/races",
+      backLabel: "Vergangene Rennen",
+      title: race ? race.name : "Rennen",
+      subtitleHtml: `${allRuns.length} ${allRuns.length === 1 ? "Lauf" : "Läufe"}`,
+      actionHtml: actions,
+    })}
+    <main>
+      ${editMode ? selectionToolsHtml(visibleRunIds, races, currentRaceId, true) : ""}
+      ${groups.length > 1 ? `<div class="filter-scroll"><div class="filter-row">${pills}</div></div>` : ""}
+      ${!runs.length ? emptyState("Keine Läufe in diesem Rennen.") : [
+        live.length ? sectionHtml("Live", live, true) : "",
+        done.length ? sectionHtml("Beendet", done, false) : "",
+      ].join("")}
+    </main>`;
+}
+
+function setRaceDetailFilter(g) {
+  raceDetailFilter = g;
+  const update = () => renderRaceRunsFromCache();
   if (document.startViewTransition) document.startViewTransition(update);
   else update();
 }
@@ -190,22 +480,23 @@ function sectionHtml(label, runs, isLive) {
 
 function runRowHtml(r) {
   const title = [r.groupname, r.runname].filter(Boolean).join(" &middot; ");
+  const selected = selectedRunIds.has(r.id);
   return `
-    <div class="row" tabindex="0" role="link" onclick="onRunRowClick(event, ${r.id})" onkeydown="if(event.key==='Enter')onRunRowClick(event, ${r.id})">
-      ${editMode ? `<button class="delete-btn" onclick="event.stopPropagation();deleteRun(${r.id})" aria-label="Lauf löschen">${ICON_TRASH}</button>` : ""}
+    <div class="row${editMode && selected ? " row-selected" : ""}" tabindex="0" role="link" onclick="onRunRowClick(event, ${r.id})" onkeydown="if(event.key==='Enter')onRunRowClick(event, ${r.id})">
+      ${editMode ? `<span class="row-checkbox${selected ? " checked" : ""}">${selected ? ICON_CHECK : ""}</span>` : ""}
       <div class="row-main">
         <div class="row-title">${title || esc(r.eventname)}</div>
         <div class="row-meta">${esc(fmtDateShort(r.started_at))} &middot; ${r.driver_count} Fahrer</div>
       </div>
       <div class="row-trail">
-        ${!r.ended_at ? '<span class="live-badge"><span class="dot"></span>LIVE</span>' : ""}
+        ${isLiveRun(r) ? '<span class="live-badge"><span class="dot"></span>LIVE</span>' : ""}
         ${editMode ? "" : ICON_CHEVRON}
       </div>
     </div>`;
 }
 
 function onRunRowClick(e, id) {
-  if (editMode) return;
+  if (editMode) { toggleRunSelection(id); return; }
   location.hash = `#/run/${id}`;
 }
 
@@ -231,7 +522,7 @@ function cacheDeletePassword(password) {
   localStorage.setItem(DELETE_AUTH_KEY, JSON.stringify({ password, expiresAt: Date.now() + DELETE_AUTH_MS }));
 }
 
-async function deleteRun(id, redirectAfter) {
+async function deleteRun(id) {
   const cached = getCachedDeletePassword();
   let password = cached;
   if (password == null) {
@@ -253,14 +544,7 @@ async function deleteRun(id, redirectAfter) {
     return;
   }
   cacheDeletePassword(password);
-  runsCache = (runsCache || []).filter((r) => r.id !== id);
-  if (redirectAfter) {
-    location.hash = "#/";
-    return;
-  }
-  const update = () => renderListFromCache();
-  if (document.startViewTransition) document.startViewTransition(update);
-  else update();
+  location.hash = "#/";
 }
 
 // ---------- run detail ----------
@@ -285,10 +569,11 @@ async function renderRun(id) {
   const title = [run.groupname, run.runname].filter(Boolean).join(" · ") || run.eventname;
   const subtitle = `
     ${esc(run.trackname)} &middot; ${esc(fmtDateShort(run.started_at))}
-    ${!run.ended_at ? '<span class="live-badge"><span class="dot"></span>LIVE</span>' : ""}
+    ${run.race_name ? `&middot; ${esc(run.race_name)}` : ""}
+    ${isLiveRun(run) ? '<span class="live-badge"><span class="dot"></span>LIVE</span>' : ""}
   `;
 
-  const deleteBtn = `<button class="edit-btn danger" onclick="deleteRun(${run.id}, true)" aria-label="Lauf löschen">${ICON_TRASH}</button>`;
+  const deleteBtn = `<button class="edit-btn danger" onclick="deleteRun(${run.id})" aria-label="Lauf löschen">${ICON_TRASH}</button>`;
   const actions = `<div class="topbar-actions">${deleteBtn}${themeToggleHtml()}</div>`;
 
   app.innerHTML = `

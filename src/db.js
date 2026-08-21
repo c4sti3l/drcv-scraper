@@ -3,6 +3,13 @@ const fs = require("fs");
 const Database = require("better-sqlite3");
 
 const SCHEMA = `
+CREATE TABLE IF NOT EXISTS races (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  archived INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   eventname TEXT,
@@ -15,7 +22,8 @@ CREATE TABLE IF NOT EXISTS runs (
   ended_at TEXT,
   last_flag TEXT,
   best_lap_time TEXT,
-  best_lap_by TEXT
+  best_lap_by TEXT,
+  race_id INTEGER REFERENCES races(id)
 );
 
 CREATE TABLE IF NOT EXISTS driver_results (
@@ -77,7 +85,17 @@ function init(dbPath) {
   db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
   db.exec(SCHEMA);
+  migrateRaces();
   return db;
+}
+
+// Older databases predate the races table/column - add it if it's missing.
+// Runs stay unassigned until the operator sorts them into a race by hand.
+function migrateRaces() {
+  const cols = getDb().prepare(`PRAGMA table_info(runs)`).all();
+  if (!cols.some((c) => c.name === "race_id")) {
+    getDb().exec(`ALTER TABLE runs ADD COLUMN race_id INTEGER REFERENCES races(id)`);
+  }
 }
 
 function getDb() {
@@ -222,15 +240,56 @@ function deleteRun(runId) {
 function listRuns() {
   return getDb()
     .prepare(
-      `SELECT id, eventname, trackname, groupname, runname, runtype, started_at, ended_at,
+      `SELECT runs.id, runs.eventname, runs.trackname, runs.groupname, runs.runname, runs.runtype,
+              runs.started_at, runs.ended_at, runs.race_id,
+              races.name AS race_name,
               (SELECT COUNT(*) FROM driver_results d WHERE d.run_id = runs.id) AS driver_count
-       FROM runs ORDER BY started_at DESC`
+       FROM runs LEFT JOIN races ON races.id = runs.race_id
+       ORDER BY runs.started_at DESC`
     )
     .all();
 }
 
 function getRun(runId) {
-  return getDb().prepare(`SELECT * FROM runs WHERE id = ?`).get(runId);
+  return getDb()
+    .prepare(
+      `SELECT runs.*, races.name AS race_name
+       FROM runs LEFT JOIN races ON races.id = runs.race_id
+       WHERE runs.id = ?`
+    )
+    .get(runId);
+}
+
+// --- races --------------------------------------------------------------
+
+function listRaces() {
+  return getDb()
+    .prepare(
+      `SELECT races.id, races.name, races.created_at,
+              COUNT(runs.id) AS run_count,
+              SUM(CASE WHEN runs.id IS NOT NULL AND runs.ended_at IS NULL THEN 1 ELSE 0 END) AS live_count,
+              MAX(runs.started_at) AS last_started_at
+       FROM races LEFT JOIN runs ON runs.race_id = races.id
+       GROUP BY races.id
+       ORDER BY COALESCE(last_started_at, races.created_at) DESC`
+    )
+    .all();
+}
+
+function getRace(raceId) {
+  return getDb().prepare(`SELECT * FROM races WHERE id = ?`).get(raceId);
+}
+
+function createRace(name) {
+  const res = getDb()
+    .prepare(`INSERT INTO races (name, archived, created_at) VALUES (?, 0, ?)`)
+    .run(name, new Date().toISOString());
+  return getRace(res.lastInsertRowid);
+}
+
+function assignRunRace(runId, raceId) {
+  getDb().prepare(`UPDATE runs SET race_id = ? WHERE id = ?`).run(raceId, runId);
+  return getRun(runId);
 }
 
 function getDriverResults(runId) {
@@ -276,4 +335,8 @@ module.exports = {
   getDriverResults,
   getLapTimes,
   getMessages,
+  listRaces,
+  getRace,
+  createRace,
+  assignRunRace,
 };

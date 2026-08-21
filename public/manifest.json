@@ -1,7 +1,7 @@
 {
   "name": "DRCV Scrapper",
   "short_name": "DRCV Scrapper",
-  "description": "DRCV Herbern Live-Timing Archiv",
+  "description": "DRCV Live-Timing Archiv",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

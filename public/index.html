@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8" />
-<title>DRCV Herbern — Live-Timing Archiv</title>
+<title>DRCV — Live-Timing Archiv</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#000000" id="theme-color-meta" />
 <link rel="manifest" href="/manifest.json" />
@@ -235,6 +235,53 @@
   }
   .delete-btn:active { transform: scale(0.9); }
   .delete-btn svg { width: 0.85rem; height: 0.85rem; }
+
+  .row-selected { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+
+  .row-checkbox {
+    flex: none; width: 1.5rem; height: 1.5rem; border-radius: 50%;
+    border: 1.5px solid var(--hairline-strong);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  }
+  .row-checkbox.checked { background: var(--accent); border-color: var(--accent); }
+  .row-checkbox svg { width: 0.75rem; height: 0.75rem; }
+
+  .selection-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: var(--radius-md); padding: 0.6rem 0.85rem; margin-bottom: 0.9rem;
+    font-size: 0.88rem; font-weight: 590;
+  }
+  .selection-actions { display: flex; gap: 0.2rem; }
+  .selection-count { color: var(--text-secondary); font-size: 0.82rem; }
+  .text-btn {
+    background: none; border: none; color: var(--accent-text); font: inherit; font-size: 0.85rem; font-weight: 600;
+    padding: 0.25rem 0.5rem; border-radius: var(--radius-sm);
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+  .text-btn:active { background: var(--surface-press); }
+  .text-btn.danger { color: var(--live); }
+  .text-btn:disabled { opacity: 0.35; }
+
+  .race-row .row-main { flex: 1 1 auto; }
+  .new-race-title { color: var(--accent-text); }
+  .race-manager-group { margin-bottom: 1.4rem; }
+
+  .assign-btn {
+    flex: none;
+    background: none; border: 1px solid var(--hairline-strong);
+    color: var(--accent-text); font-size: 0.78rem; font-weight: 600;
+    padding: 0.32rem 0.65rem; border-radius: 999px;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+  }
+  .assign-btn:active { background: var(--surface-press); transform: scale(0.96); }
+  .assign-btn:disabled { opacity: 0.35; }
+
+  .section-header.edit-races-header { margin-top: 1.6rem; }
 
   .live-badge {
     display: inline-flex; align-items: center; gap: 0.32rem;

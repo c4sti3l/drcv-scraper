@@ -1,7 +1,7 @@
 {
   "name": "drcv-livetiming-recorder",
   "version": "1.0.0",
-  "description": "Records DRCV Herbern Live-Timing WebSocket data into SQLite and serves the results afterwards.",
+  "description": "Records DRCV Live-Timing WebSocket data into SQLite and serves the results afterwards.",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

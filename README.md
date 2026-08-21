@@ -1,4 +1,4 @@
-# DRCV Herbern Live-Timing Recorder
+# DRCV Live-Timing Recorder
 
 Verbindet sich mit demselben WebSocket, den `drcv.de/herbern#/livetiming` benutzt
 (`wss://drcv.spdns.de/live-timing/...`), zeichnet jede Ergebnis-Aktualisierung in

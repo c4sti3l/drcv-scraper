@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "drcv-scrapper",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["start"],
+      "runtimeExecutable": "C:\\Users\\chenn\\AppData\\Roaming\\nvm\\v20.11.0\\node.exe",
+      "runtimeArgs": ["src/index.js"],
       "port": 8080
     }
   ]
