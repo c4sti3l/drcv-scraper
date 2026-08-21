@@ -544,7 +544,7 @@ async function deleteRun(id) {
     return;
   }
   cacheDeletePassword(password);
-  location.hash = "#/";
+  location.hash = currentListView === "race" && currentRaceId != null ? `#/race/${currentRaceId}` : "#/";
 }
 
 // ---------- run detail ----------
@@ -576,8 +576,14 @@ async function renderRun(id) {
   const deleteBtn = `<button class="edit-btn danger" onclick="deleteRun(${run.id})" aria-label="Lauf löschen">${ICON_TRASH}</button>`;
   const actions = `<div class="topbar-actions">${deleteBtn}${themeToggleHtml()}</div>`;
 
+  // Return to whichever list this run was opened from - the unassigned
+  // inbox, or the specific race whose runs were being browsed.
+  const cameFromRace = currentListView === "race" && currentRaceId != null;
+  const backHash = cameFromRace ? `#/race/${currentRaceId}` : "#/";
+  const backLabel = cameFromRace ? ((racesCache || []).find((r) => r.id === currentRaceId)?.name || "Rennen") : "Läufe";
+
   app.innerHTML = `
-    ${topbarHtml({ backHash: "#/", title, subtitleHtml: subtitle, actionHtml: actions })}
+    ${topbarHtml({ backHash, backLabel, title, subtitleHtml: subtitle, actionHtml: actions })}
     <main>
       ${!results.length ? emptyState("Noch keine Ergebnisse.") : `
         ${results.length > 1 ? searchInputHtml() : ""}
