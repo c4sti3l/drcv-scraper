@@ -413,8 +413,11 @@ function raceRowHtml(r) {
 
 async function renderRaceRuns(id) {
   editMode = false;
-  raceDetailFilter = "all";
-  currentRaceId = Number(id);
+  const raceId = Number(id);
+  // Only reset the class filter when actually switching to a different
+  // race - returning here from a run detail page should keep it.
+  if (raceId !== currentRaceId) raceDetailFilter = "all";
+  currentRaceId = raceId;
   const [runs, races] = await Promise.all([
     fetch("/api/runs").then((r) => r.json()),
     fetch("/api/races").then((r) => r.json()),
