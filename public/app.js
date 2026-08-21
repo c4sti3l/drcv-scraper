@@ -13,6 +13,7 @@ const ICON_CHEVRON = `<svg class="chevron" viewBox="0 0 8 14" fill="none" aria-h
 const ICON_BACK = `<svg viewBox="0 0 12 20" fill="none" width="1.05em" height="1.05em" aria-hidden="true"><path d="M10 1L2 10L10 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_TRASH = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M3.5 4l.6 9.5a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9L12.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_SAVE = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+const ICON_CLOSE = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 const ICON_SUN = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3.2" stroke="currentColor" stroke-width="1.4"/><path d="M8 1v1.6M8 13.4V15M15 8h-1.6M2.6 8H1M12.7 3.3l-1.1 1.1M4.4 11.6l-1.1 1.1M12.7 12.7l-1.1-1.1M4.4 4.4L3.3 3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
 const ICON_MOON = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.7A6 6 0 1 1 6.3 2.5a5 5 0 0 0 7.2 7.2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
 
@@ -331,6 +332,7 @@ function applySavedSearch(query) {
   const input = document.querySelector(".search-input");
   if (input) input.value = query;
   filterRunResults(query);
+  toggleSearchClearBtn(query);
 }
 
 function deleteSavedSearch(query, e) {
@@ -356,13 +358,35 @@ function searchInputHtml() {
   return `
     <div class="search-wrap">
       <div class="search-row">
-        <input type="search" class="search-input" placeholder="Name oder Startnummer, mehrere mit Komma trennen"
-               autocomplete="off" autocorrect="off" spellcheck="false"
-               value="${esc(runSearchQuery)}" oninput="filterRunResults(this.value)" />
+        <div class="search-input-wrap">
+          <input type="search" class="search-input" placeholder="Name oder Startnummer, mehrere mit Komma trennen"
+                 autocomplete="off" autocorrect="off" spellcheck="false"
+                 value="${esc(runSearchQuery)}" oninput="onRunSearchInput(this)" />
+          <button type="button" class="search-clear-btn" onclick="clearRunSearch()" aria-label="Suche löschen"
+                  style="display:${runSearchQuery ? "flex" : "none"}">${ICON_CLOSE}</button>
+        </div>
         <button class="save-search-btn" onclick="saveCurrentSearch()" aria-label="Aktuelle Suche speichern" title="Aktuelle Suche speichern">${ICON_SAVE}</button>
       </div>
       <div class="saved-search-row" id="saved-searches">${savedSearchChipsHtml()}</div>
     </div>`;
+}
+
+function onRunSearchInput(el) {
+  filterRunResults(el.value);
+  toggleSearchClearBtn(el.value);
+}
+
+function toggleSearchClearBtn(value) {
+  const btn = document.querySelector(".search-clear-btn");
+  if (btn) btn.style.display = value ? "flex" : "none";
+}
+
+function clearRunSearch() {
+  const input = document.querySelector(".search-input");
+  if (input) input.value = "";
+  filterRunResults("");
+  toggleSearchClearBtn("");
+  if (input) input.focus();
 }
 
 function isOverallFastest(r) {

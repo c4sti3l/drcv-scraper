@@ -5,6 +5,14 @@
 <title>DRCV Herbern — Live-Timing Archiv</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#000000" id="theme-color-meta" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="DRCV Scrapper" />
 <script>
   // Runs before first paint so a saved "light" preference never flashes dark first.
   if (localStorage.getItem("drcv-theme") === "light") {
@@ -245,16 +253,27 @@
 
   .search-wrap { margin-bottom: 0.85rem; }
   .search-row { display: flex; align-items: stretch; gap: 0.5rem; }
+  .search-input-wrap { position: relative; flex: 1 1 auto; min-width: 0; }
   .search-input {
-    flex: 1 1 auto; min-width: 0;
+    width: 100%;
     box-sizing: border-box; -webkit-appearance: none; appearance: none;
     background: var(--surface); border: 1px solid var(--hairline);
-    border-radius: var(--radius-md); padding: 0.6rem 0.85rem;
+    border-radius: var(--radius-md); padding: 0.6rem 2.1rem 0.6rem 0.85rem;
     font: inherit; font-size: 0.95rem; color: var(--text);
   }
   .search-input::placeholder { color: var(--text-tertiary); }
   .search-input:focus { outline: none; border-color: var(--accent); }
   .search-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+  .search-clear-btn {
+    position: absolute; right: 0.35rem; top: 50%; transform: translateY(-50%);
+    width: 1.5rem; height: 1.5rem; border-radius: 50%; border: none; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface-2); color: var(--text-tertiary);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .search-clear-btn svg { width: 0.65rem; height: 0.65rem; }
+  .search-clear-btn:active { background: var(--surface-press); color: var(--text); }
 
   .save-search-btn {
     flex: none; width: 2.65rem;
